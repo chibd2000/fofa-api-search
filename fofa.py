@@ -9,8 +9,9 @@ from gevent import monkey, pool; monkey.patch_all()
 import xlsxwriter
 from bs4 import BeautifulSoup
 import chardet
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 import os
+import time
 
 requests.packages.urllib3.disable_warnings()
 
@@ -82,33 +83,17 @@ class Request:
     def __init__(self, cookie=None):
         self.cookie = cookie
 
-    def get_request(self, url):
-        # print(self._get_url(url))
+    def getRequest(self, url):
         try:
-            resp = requests.get(self._get_url(url), timeout=2, headers=self._get_headers(), verify=False, allow_redirects=True)
+            resp = requests.get(self._getUrl(url), timeout=2, headers=self._getHeaders(), verify=False, allow_redirects=True)
             text = resp.content.decode(encoding=chardet.detect(resp.content)['encoding'])
-            title = self._get_title(text).strip().replace('\r', '').replace('\n', '')
+            title = self._getTitle(text).strip().replace('\r', '').replace('\n', '')
             status = resp.status_code
             return title, status, resp
         except Exception as e:
             return e
 
-
-    def get_url_by_port(self, domain, port):
-        protocols = ['http://', 'https://']
-        if port == 80:
-            url = f'http://{domain}'
-            return url
-        elif port == 443:
-            url = f'https://{domain}'
-            return url
-        else:
-            url = []
-            for protocol in protocols:
-                url.append(f'{protocol}{domain}:{port}')
-            return url
-
-    def _get_headers(self):
+    def _getHeaders(self):
         user_agents = [
             'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
             '(KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36',
@@ -128,7 +113,7 @@ class Request:
         }
         return headers
 
-    def _get_title(self, markup):
+    def _getTitle(self, markup):
         soup = BeautifulSoup(markup, 'lxml')
 
         title = soup.title
@@ -160,12 +145,17 @@ class Request:
             return text
         return ''
 
-    def _get_url(self, domain):
+    def _getUrl(self, domain):
         if 'http://' in domain or 'https://' in domain:
             return f'{domain}'
         else:
-            return f'http://{domain}'
+            if ':443' in domain:
+                return f'https://{domain}'
 
+            if ':80' in domain:
+                return f'http://{domain}'
+
+            return f'http://{domain}'
 
 class TextUtils:
     @staticmethod
@@ -209,7 +199,7 @@ class FofaSpider():
             print("===========================")
 
             #  开始解析数据
-            a, b, c = self.request.get_request(self.searchUrl.format(FOFA_EMAIL=self.fofa_email, API_KEY=self.fofa_key, B64_DATA=self.searchKeyword, PAGE=page))
+            a, b, c = self.request.getRequest(self.searchUrl.format(FOFA_EMAIL=self.fofa_email, API_KEY=self.fofa_key, B64_DATA=self.searchKeyword, PAGE=page))
             jsonData = c.json()
             for i in jsonData['results']:
                 # a,b,c = self.request.get_request(i[0])
@@ -221,16 +211,15 @@ class FofaSpider():
                     'port': i[2],
                     'web_service': '',  # 先不写
                     'port_service': TextUtils.getPortService(i[2]),
-                    'search_keyword': self.searchKeyword
+                    'search_keyword': str(base64.b64decode(unquote(self.searchKeyword).encode('utf-8')),encoding='utf-8')
                 }
-                print(info)
+                # print(info)
                 webList.append(info)
 
-        print(webList)
-        gevent_pool = pool.Pool(int(self.thread_num))
+        # print(webList)
+        gevent_pool = pool.Pool(int(self.thread_num*5))
         while webList:
-            tasks = [gevent_pool.spawn(self._fetchUrl, webList.pop()) for i in
-                     range(len(webList[:int(self.thread_num) * 10]))]
+            tasks = [gevent_pool.spawn(self._fetchUrl, webList.pop()) for i in range(len(webList[:int(self.thread_num) * 10]))]
             for task in tasks:
                 task.join()
             del tasks
@@ -245,7 +234,7 @@ class FofaSpider():
 
     def _getPage(self):
         # 先获取该语法查询的总数量
-        a, b, c = self.request.get_request(self.searchUrl.format(FOFA_EMAIL=self.fofa_email, API_KEY=self.fofa_key, B64_DATA=self.searchKeyword, PAGE=1))
+        a, b, c = self.request.getRequest(self.searchUrl.format(FOFA_EMAIL=self.fofa_email, API_KEY=self.fofa_key, B64_DATA=self.searchKeyword, PAGE=1))
         self.pageSize = c.json().get('size') // 100 + 1
 
     def _writeFile(self):
@@ -266,13 +255,16 @@ class FofaSpider():
         workbook.close()
 
     def _fetchUrl(self, aDict):
-        # 重新再封装一个request: 对于获取标题要使用的request请求
-        print("标题扫描: " + str(aDict['domain']) )
-        a,b,c = self.request.get_request(aDict['domain'])
-        aDict['title'] = a
-        aDict['web_service'] = c.headers.get('Server')
+        # 重新再封装一层request: 对于获取标题要使用的request请求
+        print("标题扫描: " + aDict['domain'])
+        try:
+            a,b,c = self.request.getRequest(aDict['domain'])
+            aDict['title'] = a
+            aDict['web_service'] = c.headers.get('Server')
+        except:
+            aDict['title'] = '-'
+            aDict['web_service'] = '-'
         self.webDomainList.append(aDict)
-
 
     def run(self):
         self._getPage()
@@ -324,7 +316,10 @@ if '__main__' == __name__:
 
     try:
         # fofa.getWebSpider()
+        start=time.time()
         fofa.run()
+        end = time.time()
+        print('Running time: %s Seconds' % (end - start))
     except KeyboardInterrupt:
         print("用户 Ctrl+C 结束退出")
         exit(0)
