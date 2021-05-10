@@ -85,7 +85,7 @@ class Request:
 
     def getRequest(self, url):
         try:
-            resp = requests.get(self._getUrl(url), timeout=2, headers=self._getHeaders(), verify=False, allow_redirects=True)
+            resp = requests.get(self.getUrl(url), timeout=2, headers=self._getHeaders(), verify=False, allow_redirects=True)
             text = resp.content.decode(encoding=chardet.detect(resp.content)['encoding'])
             title = self._getTitle(text).strip().replace('\r', '').replace('\n', '')
             status = resp.status_code
@@ -145,7 +145,7 @@ class Request:
             return text
         return ''
 
-    def _getUrl(self, domain):
+    def getUrl(self, domain):
         if 'http://' in domain or 'https://' in domain:
             return f'{domain}'
         else:
@@ -256,14 +256,17 @@ class FofaSpider():
 
     def _fetchUrl(self, aDict):
         # 重新再封装一层request: 对于获取标题要使用的request请求
-        print("标题扫描: " + aDict['domain'])
+        print("标题扫描: " + self.request.getUrl(aDict['domain']))
         try:
             a,b,c = self.request.getRequest(aDict['domain'])
             aDict['title'] = a
             aDict['web_service'] = c.headers.get('Server')
+            aDict['domain'] = self.request.getUrl(aDict['domain'])
         except:
             aDict['title'] = '-'
             aDict['web_service'] = '-'
+
+        # print(aDict)
         self.webDomainList.append(aDict)
 
     def run(self):
