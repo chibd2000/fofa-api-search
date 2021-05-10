@@ -9,6 +9,6 @@
 ![image](https://github.com/adezz/fofa/blob/main/pic/config.png)
   
 效果：  
-![image](https://github.com/adezz/fofa/blob/main/pic/result.png)
+![image](https://github.com/adezz/fofa/blob/main/pic/resutl.png)
 
 
