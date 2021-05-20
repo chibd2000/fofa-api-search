@@ -2,10 +2,10 @@
 import random
 
 import openpyxl
-import requests
 import configparser
 import base64
 from gevent import monkey, pool; monkey.patch_all()
+import requests
 import xlsxwriter
 from bs4 import BeautifulSoup
 import chardet
